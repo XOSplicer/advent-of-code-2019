@@ -148,6 +148,7 @@ fn main() -> AnyResult<()> {
         .split(',')
         .filter_map(|s| s.parse().ok())
         .collect();
+    #[allow(clippy::unreadable_literal)]
     let expected = 19690720;
     let mut answer = None;
     for at1 in 0..100 {

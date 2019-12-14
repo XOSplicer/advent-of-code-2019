@@ -21,7 +21,7 @@ impl Iterator for FuelIter {
             return None;
         }
         self.current_mass = fuel;
-        return Some(fuel);
+        Some(fuel)
     }
 }
 
