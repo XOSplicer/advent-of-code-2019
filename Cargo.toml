@@ -1,0 +1,29 @@
+[package]
+name = "adventofcode"
+version = "0.1.0"
+authors = ["Felix <stegmaier.felix@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.25"
+either = "1.5.3"
+thiserror = "1.0.9"
+
+[[bin]]
+name = "01-1"
+path = "src/01-1.rs"
+
+[[bin]]
+name = "01-2"
+path = "src/01-2.rs"
+
+[[bin]]
+name = "02-1"
+path = "src/02-1.rs"
+
+[[bin]]
+name = "02-2"
+path = "src/02-2.rs"
+
