@@ -1,6 +1,6 @@
-use std::fs;
-use std::convert::TryFrom;
 use anyhow::Result as AnyResult;
+use std::convert::TryFrom;
+use std::fs;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -25,7 +25,7 @@ impl TryFrom<&i64> for OpCode {
             99 => Ok(OpCode::Halt),
             1 => Ok(OpCode::Add),
             2 => Ok(OpCode::Mul),
-            _ => Err(MyError::UnknownOpCode(*i))
+            _ => Err(MyError::UnknownOpCode(*i)),
         }
     }
 }
@@ -100,20 +100,31 @@ impl IOperation for Operation {
 }
 
 fn op_at(memory: &[i64], index: usize) -> Result<Operation, MyError> {
-    let opcode = OpCode::try_from(
-        memory.get(index).ok_or(MyError::OutOfBounds(index))?)?;
+    let opcode = OpCode::try_from(memory.get(index).ok_or(MyError::OutOfBounds(index))?)?;
     Ok(match opcode {
         OpCode::Halt => Operation::Halt(HaltOperation),
         OpCode::Add => Operation::Add(AddOperation {
-            src1: *memory.get(index + 1).ok_or(MyError::OutOfBounds(index + 1))? as _,
-            src2: *memory.get(index + 2).ok_or(MyError::OutOfBounds(index + 2))? as _,
-            dest: *memory.get(index + 3).ok_or(MyError::OutOfBounds(index + 3))? as _,
+            src1: *memory
+                .get(index + 1)
+                .ok_or(MyError::OutOfBounds(index + 1))? as _,
+            src2: *memory
+                .get(index + 2)
+                .ok_or(MyError::OutOfBounds(index + 2))? as _,
+            dest: *memory
+                .get(index + 3)
+                .ok_or(MyError::OutOfBounds(index + 3))? as _,
         }),
         OpCode::Mul => Operation::Mul(MulOperation {
-            src1: *memory.get(index + 1).ok_or(MyError::OutOfBounds(index + 1))? as _,
-            src2: *memory.get(index + 2).ok_or(MyError::OutOfBounds(index + 2))? as _,
-            dest: *memory.get(index + 3).ok_or(MyError::OutOfBounds(index + 3))? as _,
-        })
+            src1: *memory
+                .get(index + 1)
+                .ok_or(MyError::OutOfBounds(index + 1))? as _,
+            src2: *memory
+                .get(index + 2)
+                .ok_or(MyError::OutOfBounds(index + 2))? as _,
+            dest: *memory
+                .get(index + 3)
+                .ok_or(MyError::OutOfBounds(index + 3))? as _,
+        }),
     })
 }
 

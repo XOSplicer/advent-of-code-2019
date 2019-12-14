@@ -1,5 +1,5 @@
-use std::fs;
 use anyhow::Result as AnyResult;
+use std::fs;
 
 struct FuelIter {
     current_mass: i64,
@@ -8,10 +8,9 @@ struct FuelIter {
 impl FuelIter {
     fn new(module_mass: i64) -> Self {
         Self {
-            current_mass: module_mass
+            current_mass: module_mass,
         }
     }
-
 }
 
 impl Iterator for FuelIter {

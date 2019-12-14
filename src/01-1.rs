@@ -1,5 +1,5 @@
-use std::fs;
 use anyhow::Result as AnyResult;
+use std::fs;
 
 fn main() -> AnyResult<()> {
     let answer: i64 = fs::read_to_string("input/01")?
