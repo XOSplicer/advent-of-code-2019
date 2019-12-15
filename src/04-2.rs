@@ -15,17 +15,19 @@ impl Password {
     }
     fn meets_criteria(&self) -> bool {
         let six_digits = self.digits.len() == 6;
-        let same_adjacent = self
-            .digits
-            .iter()
-            .zip(self.digits.iter().skip(1))
-            .any(|(d1, d2)| d1 == d2);
         let never_decrease = self
             .digits
             .iter()
             .zip(self.digits.iter().skip(1))
             .all(|(d1, d2)| d1 <= d2);
-        six_digits && same_adjacent && never_decrease
+        #[allow(clippy::naive_bytecount)]
+        let group_of_two = (0..=9u8)
+            .map(|d| self.digits.iter().filter(|&c| d == *c).count())
+            .filter(|&g| g == 2)
+            .count()
+            > 0;
+
+        six_digits && never_decrease && group_of_two
     }
 }
 
