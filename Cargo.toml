@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.25"
+daggy = "0.6.0"
 either = "1.5.3"
 thiserror = "1.0.9"
 
@@ -42,4 +43,8 @@ path = "src/04-1.rs"
 [[bin]]
 name = "04-2"
 path = "src/04-2.rs"
+
+[[bin]]
+name = "06-1"
+path = "src/06-1.rs"
 
