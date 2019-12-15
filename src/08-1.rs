@@ -19,6 +19,5 @@ fn main() -> AnyResult<()> {
         .min_by_key(|layer_count| layer_count[&'0'])
         .map(|layer_count| layer_count[&'1'] * layer_count[&'2']);
     println!("{:?}", answer);
-
     Ok(())
 }
