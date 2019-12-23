@@ -1,11 +1,16 @@
 use anyhow::Result as AnyResult;
+use daggy::petgraph::dot::{Config, Dot};
+use daggy::petgraph::graph::NodeIndex;
+use daggy::Dag;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt;
 use std::fs;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
 use std::iter;
+use daggy::walker;
 
 #[derive(Debug, Clone)]
 struct Ingridient {
@@ -55,7 +60,7 @@ impl fmt::Display for Formula {
     }
 }
 
-impl<'a> TryFrom<&str> for Formula {
+impl TryFrom<&str> for Formula {
     type Error = IoError;
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         let mut sides = s.split("=>");
@@ -74,77 +79,161 @@ impl<'a> TryFrom<&str> for Formula {
     }
 }
 
+#[derive(Clone, Debug)]
+struct Formulas {
+    inner: HashMap<String, Formula>,
+}
+
+impl TryFrom<&str> for Formulas {
+    type Error = IoError;
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let inner = s
+            .lines()
+            .map(|s| Formula::try_from(s).map(|f| (f.output.name.clone(), f)))
+            .collect::<Result<_, _>>()?;
+        Ok(Formulas { inner })
+    }
+}
+
+impl Formulas {
+    fn element_set(&self) -> HashSet<String> {
+        self.inner
+            .values()
+            .flat_map(|formula| {
+                formula
+                    .inputs
+                    .iter()
+                    .map(|i| i.name.clone())
+                    .chain(iter::once(formula.output.name.clone()))
+            })
+            .collect()
+    }
+    fn formulas(&self) -> impl Iterator<Item = &Formula> {
+        self.inner.values()
+    }
+}
+
+#[derive(Clone, Debug)]
+enum EdgeData {
+    Input(usize),
+    Output(usize),
+}
+
+#[derive(Clone, Debug)]
+enum NodeKind {
+    Formula,
+    Element,
+}
+
+#[derive(Clone, Debug)]
+struct NodeData {
+    kind: NodeKind,
+    name: String,
+    needed: usize,
+}
+
+impl NodeData {
+    fn formula(f: &Formula) -> Self {
+        NodeData {
+            kind: NodeKind::Formula,
+            name: f.to_string(),
+            needed: 0,
+        }
+    }
+    fn element(name: String) -> Self {
+        NodeData {
+            kind: NodeKind::Element,
+            name: name,
+            needed: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Factory {
-    stack: HashMap<String, usize>,
+    dag: Dag<NodeData, EdgeData>,
+    element_nodes: HashMap<String, NodeIndex>,
 }
 
 impl Factory {
-    fn new<'a, I: IntoIterator<Item = &'a str>>(iter: I) -> Self {
-        let mut stack: HashMap<String, usize> =
-            iter.into_iter().map(|s| (s.to_owned(), 0)).collect();
-        stack.insert("ORE".to_owned(), 0);
-        stack.insert("FUEL".to_owned(), 1);
-        Factory { stack }
-    }
-    fn find_next_formula<'b>(&self, formulas: &'b HashMap<String, Formula>) -> Option<&'b Formula> {
 
-        self.stack
-            .iter()
-            .filter(|(_, &amount)| amount > 0)
-            .filter_map(|(name, _)| formulas.get(name))
-            .max_by_key(|formula| *self.stack.get(&formula.output.name).unwrap() as i64 - formula.output.amount as i64)
-    }
-    fn unapply_formula(&mut self, formula: &Formula) {
-        if self.stack.get(&formula.output.name).unwrap_or(&0) == &0 {
-            panic!(
-                "Cannot unapply formula where output should not be produced: {:?}",
-                &formula
-            );
+    fn from_formulas(formulas: &Formulas) -> AnyResult<Self> {
+        let elements = formulas.element_set();
+        let mut dag: Dag<NodeData, EdgeData> = Dag::new();
+        let mut element_nodes: HashMap<String, NodeIndex> = HashMap::new();
+        for element in elements {
+            element_nodes.insert(element.clone(), dag.add_node(NodeData::element(element)));
         }
-        let new_output = self
-            .stack
-            .get(&formula.output.name)
-            .unwrap()
-            .saturating_sub(formula.output.amount);
-        *self.stack.get_mut(&formula.output.name).unwrap() = new_output;
-        for input in formula.inputs.iter() {
-            *self.stack.entry(input.name.clone()).or_insert(0) += input.amount;
+        for formula in formulas.formulas() {
+            let formula_node = dag.add_node(NodeData::formula(formula));
+            dag.add_edge(
+                formula_node,
+                element_nodes.get(&formula.output.name).unwrap().clone(),
+                EdgeData::Output(formula.output.amount),
+            )?;
+            for input in formula.inputs.iter() {
+                dag.add_edge(
+                    element_nodes.get(&input.name).unwrap().clone(),
+                    formula_node,
+                    EdgeData::Input(input.amount),
+                )?;
+            }
         }
+        dag.node_weight_mut(element_nodes["FUEL"]).unwrap().needed = 1;
+        Ok(Self { element_nodes, dag })
     }
+
+    fn print_dot(&self) {
+        println!("{:?}", Dot::with_config(&self.dag.graph(), &[]));
+    }
+
     fn is_finished(&self) -> bool {
-        self.stack
+        self.dag
+            .raw_nodes()
             .iter()
-            .filter(|(name, _)| name != &"ORE")
-            .all(|(_, &value)| value == 0)
+            .map(|node| &node.weight)
+            .all(|node_data| match node_data.kind {
+                NodeKind::Formula => node_data.needed == 0,
+                NodeKind::Element => {
+                    if node_data.name == "ORE" {
+                        node_data.needed > 0
+                    } else {
+                        node_data.needed == 0
+                    }
+                }
+            })
     }
+
+    fn reduce_once(&mut self) {
+        let mut node_id = self.element_nodes["FUEL"];
+        while self.dag.node_weight(node_id).unwrap().needed == 0 {
+            // node_id = self.dag.parents(node_id).walk_next(&self.dag).unwrap().1;
+            unimplemented!();
+        }
+
+        // unimplemented!()
+    }
+
+    fn reduce(&mut self) -> usize {
+        while !self.is_finished() {
+            self.reduce_once();
+        }
+        self.ore_needed()
+    }
+
     fn ore_needed(&self) -> usize {
-        *self.stack.get("ORE").unwrap()
+        self.dag.node_weight(self.element_nodes["ORE"]).unwrap().needed
     }
 }
 
 fn main() -> AnyResult<()> {
-    let file = fs::read_to_string("input/14-example-2")?;
-    let formulas: HashMap<String, Formula> = file
-        .lines()
-        .map(|s| Formula::try_from(s).map(|f| (f.output.name.clone(), f)))
-        .collect::<Result<_, _>>()?;
+    let file = fs::read_to_string("input/14-example-1")?;
+    let formulas = Formulas::try_from(file.as_str())?;
     println!("{:#?}", &formulas);
-    let mut factory = Factory::new(
-        formulas
-            .values()
-            .flat_map(|f| f.inputs.iter().chain(iter::once(&f.output)))
-            .map(|i| i.name.as_str()),
-    );
+    let mut factory = Factory::from_formulas(&formulas)?;
     println!("{:#?}", &factory);
-    while !factory.is_finished() {
-        let formula = factory
-            .find_next_formula(&formulas)
-            .expect("Found no formula to unapply");
-        println!("Unapplying {}", &formula);
-        factory.unapply_formula(&formula);
-        println!("New factory {:?}", &factory);
-    }
-    println!("{}", factory.ore_needed());
+    factory.print_dot();
+    let answer = factory.reduce();
+    println!("Ore needed: {}", answer);
     Ok(())
 }
