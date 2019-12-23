@@ -1,5 +1,5 @@
 use anyhow::Result as AnyResult;
-use daggy::petgraph::dot::{Config, Dot};
+use daggy::petgraph::dot::Dot;
 use daggy::petgraph::graph::NodeIndex;
 use daggy::Dag;
 use std::collections::HashMap;
@@ -10,7 +10,8 @@ use std::fs;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
 use std::iter;
-use daggy::walker;
+use daggy::petgraph::visit;
+use daggy::Walker;
 
 #[derive(Debug, Clone)]
 struct Ingridient {
@@ -130,6 +131,7 @@ struct NodeData {
     kind: NodeKind,
     name: String,
     needed: usize,
+    depth: Option<usize>
 }
 
 impl NodeData {
@@ -138,6 +140,7 @@ impl NodeData {
             kind: NodeKind::Formula,
             name: f.to_string(),
             needed: 0,
+            depth: None,
         }
     }
     fn element(name: String) -> Self {
@@ -145,6 +148,7 @@ impl NodeData {
             kind: NodeKind::Element,
             name: name,
             needed: 0,
+            depth: None
         }
     }
 }
@@ -159,11 +163,14 @@ impl Factory {
 
     fn from_formulas(formulas: &Formulas) -> AnyResult<Self> {
         let elements = formulas.element_set();
+
         let mut dag: Dag<NodeData, EdgeData> = Dag::new();
         let mut element_nodes: HashMap<String, NodeIndex> = HashMap::new();
+
         for element in elements {
             element_nodes.insert(element.clone(), dag.add_node(NodeData::element(element)));
         }
+
         for formula in formulas.formulas() {
             let formula_node = dag.add_node(NodeData::formula(formula));
             dag.add_edge(
@@ -179,7 +186,28 @@ impl Factory {
                 )?;
             }
         }
+
         dag.node_weight_mut(element_nodes["FUEL"]).unwrap().needed = 1;
+        dag.node_weight_mut(element_nodes["ORE"]).unwrap().depth = Some(0);
+
+        let mut dfs = visit::Dfs::new(dag.graph(), element_nodes["ORE"]);
+        while let Some(node_index) = dfs.next(dag.graph()) {
+            let own_depth = dag.node_weight(node_index).unwrap().depth;
+            let parent_depth = dag.parents(node_index)
+                .iter(&dag)
+                .map(|(_edge_idx, parent_index)| parent_index)
+                .filter_map(|parent_index| dag.node_weight(parent_index).unwrap().depth)
+                .max();
+            let new_depth = match (own_depth, parent_depth) {
+                (Some(o), None) => o,
+                (Some(o), Some(p)) if o >= p + 1 => o,
+                (Some(o), Some(p)) if p + 1 > o => p + 1,
+                (None, Some(p)) => p + 1,
+                _ => panic!("Cant determine depth"),
+            };
+            dag.node_weight_mut(node_index).unwrap().depth = Some(new_depth);
+        }
+
         Ok(Self { element_nodes, dag })
     }
 
@@ -211,7 +239,7 @@ impl Factory {
             unimplemented!();
         }
 
-        // unimplemented!()
+        unimplemented!()
     }
 
     fn reduce(&mut self) -> usize {
