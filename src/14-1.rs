@@ -88,12 +88,12 @@ impl Factory {
         Factory { stack }
     }
     fn find_next_formula<'b>(&self, formulas: &'b HashMap<String, Formula>) -> Option<&'b Formula> {
-        // TODO: Reducing any  valid formula will not lead to an optimal solution
+
         self.stack
             .iter()
             .filter(|(_, &amount)| amount > 0)
             .filter_map(|(name, _)| formulas.get(name))
-            .next()
+            .max_by_key(|formula| *self.stack.get(&formula.output.name).unwrap() as i64 - formula.output.amount as i64)
     }
     fn unapply_formula(&mut self, formula: &Formula) {
         if self.stack.get(&formula.output.name).unwrap_or(&0) == &0 {
@@ -124,7 +124,7 @@ impl Factory {
 }
 
 fn main() -> AnyResult<()> {
-    let file = fs::read_to_string("input/14-example-1")?;
+    let file = fs::read_to_string("input/14-example-2")?;
     let formulas: HashMap<String, Formula> = file
         .lines()
         .map(|s| Formula::try_from(s).map(|f| (f.output.name.clone(), f)))
