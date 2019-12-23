@@ -1,7 +1,9 @@
 use anyhow::Result as AnyResult;
 use daggy::petgraph::dot::Dot;
-use daggy::petgraph::graph::NodeIndex;
+use daggy::petgraph::graph::{EdgeIndex, NodeIndex};
+use daggy::petgraph::visit;
 use daggy::Dag;
+use daggy::Walker;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
@@ -10,8 +12,6 @@ use std::fs;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
 use std::iter;
-use daggy::petgraph::visit;
-use daggy::Walker;
 
 #[derive(Debug, Clone)]
 struct Ingridient {
@@ -131,7 +131,7 @@ struct NodeData {
     kind: NodeKind,
     name: String,
     needed: usize,
-    depth: Option<usize>
+    depth: Option<usize>,
 }
 
 impl NodeData {
@@ -148,7 +148,7 @@ impl NodeData {
             kind: NodeKind::Element,
             name: name,
             needed: 0,
-            depth: None
+            depth: None,
         }
     }
 }
@@ -157,22 +157,26 @@ impl NodeData {
 struct Factory {
     dag: Dag<NodeData, EdgeData>,
     element_nodes: HashMap<String, NodeIndex>,
+    all_nodes: HashSet<NodeIndex>,
 }
 
 impl Factory {
-
     fn from_formulas(formulas: &Formulas) -> AnyResult<Self> {
         let elements = formulas.element_set();
 
         let mut dag: Dag<NodeData, EdgeData> = Dag::new();
         let mut element_nodes: HashMap<String, NodeIndex> = HashMap::new();
+        let mut all_nodes: HashSet<NodeIndex> = HashSet::new();
 
         for element in elements {
-            element_nodes.insert(element.clone(), dag.add_node(NodeData::element(element)));
+            let element_node = dag.add_node(NodeData::element(element.clone()));
+            element_nodes.insert(element.clone(), element_node);
+            all_nodes.insert(element_node);
         }
 
         for formula in formulas.formulas() {
             let formula_node = dag.add_node(NodeData::formula(formula));
+            all_nodes.insert(formula_node);
             dag.add_edge(
                 formula_node,
                 element_nodes.get(&formula.output.name).unwrap().clone(),
@@ -193,7 +197,8 @@ impl Factory {
         let mut dfs = visit::Dfs::new(dag.graph(), element_nodes["ORE"]);
         while let Some(node_index) = dfs.next(dag.graph()) {
             let own_depth = dag.node_weight(node_index).unwrap().depth;
-            let parent_depth = dag.parents(node_index)
+            let parent_depth = dag
+                .parents(node_index)
                 .iter(&dag)
                 .map(|(_edge_idx, parent_index)| parent_index)
                 .filter_map(|parent_index| dag.node_weight(parent_index).unwrap().depth)
@@ -208,7 +213,11 @@ impl Factory {
             dag.node_weight_mut(node_index).unwrap().depth = Some(new_depth);
         }
 
-        Ok(Self { element_nodes, dag })
+        Ok(Self {
+            element_nodes,
+            dag,
+            all_nodes,
+        })
     }
 
     fn print_dot(&self) {
@@ -232,30 +241,72 @@ impl Factory {
             })
     }
 
-    fn reduce_once(&mut self) {
-        let mut node_id = self.element_nodes["FUEL"];
-        while self.dag.node_weight(node_id).unwrap().needed == 0 {
-            // node_id = self.dag.parents(node_id).walk_next(&self.dag).unwrap().1;
-            unimplemented!();
+    fn ceiling_div(a: usize, b: usize) -> usize {
+        let div = a / b;
+        let mod_ = a % b;
+        if mod_ == 0 {
+            div
+        } else {
+            div + 1
         }
+    }
 
-        unimplemented!()
+    fn calc_add_parent_needed(edge_data: &EdgeData, child_needed: usize) -> usize {
+        match edge_data {
+            &EdgeData::Input(x) => x * child_needed,
+            &EdgeData::Output(x) => Self::ceiling_div(child_needed, x),
+        }
     }
 
     fn reduce(&mut self) -> usize {
+        let mut travese_order: Vec<NodeIndex> = self.all_nodes.iter().cloned().collect();
+        travese_order.sort_by_key(|&node_index| {
+            self.dag
+            .node_weight(node_index)
+            .unwrap()
+            .depth
+            .expect("Cant traverse dag without depth")
+        });
+        travese_order.reverse();
+        println!("{:?}", &travese_order);
+
         while !self.is_finished() {
-            self.reduce_once();
+
+            for node_index in travese_order.iter() {
+
+                let parents: Vec<(EdgeIndex, NodeIndex)> = self.dag
+                    .parents(*node_index)
+                    .iter(&self.dag)
+                    .collect();
+
+                for (edge_index, parent_index) in &parents {
+
+                    let add_parent_needed = Self::calc_add_parent_needed(
+                        self.dag.edge_weight(*edge_index).unwrap(),
+                        self.dag.node_weight(*node_index).unwrap().needed
+                    );
+
+                    self.dag.node_weight_mut(*parent_index).unwrap().needed += add_parent_needed;
+                }
+                if parents.len() > 0 {
+                    self.dag.node_weight_mut(*node_index).unwrap().needed = 0;
+                }
+            }
         }
+        self.print_dot();
         self.ore_needed()
     }
 
     fn ore_needed(&self) -> usize {
-        self.dag.node_weight(self.element_nodes["ORE"]).unwrap().needed
+        self.dag
+            .node_weight(self.element_nodes["ORE"])
+            .unwrap()
+            .needed
     }
 }
 
 fn main() -> AnyResult<()> {
-    let file = fs::read_to_string("input/14-example-1")?;
+    let file = fs::read_to_string("input/14-exmaple-6")?;
     let formulas = Formulas::try_from(file.as_str())?;
     println!("{:#?}", &formulas);
     let mut factory = Factory::from_formulas(&formulas)?;
