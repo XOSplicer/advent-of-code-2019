@@ -11,6 +11,7 @@ use std::fmt;
 use std::fs;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
+use std::io::Write;
 use std::iter;
 
 #[derive(Debug, Clone)]
@@ -220,6 +221,10 @@ impl Factory {
         })
     }
 
+    fn dot(&self) -> String {
+        format!("{:?}", Dot::with_config(&self.dag.graph(), &[]))
+    }
+
     fn print_dot(&self) {
         println!("{:?}", Dot::with_config(&self.dag.graph(), &[]));
     }
@@ -262,28 +267,32 @@ impl Factory {
         let mut travese_order: Vec<NodeIndex> = self.all_nodes.iter().cloned().collect();
         travese_order.sort_by_key(|&node_index| {
             self.dag
-            .node_weight(node_index)
-            .unwrap()
-            .depth
-            .expect("Cant traverse dag without depth")
+                .node_weight(node_index)
+                .unwrap()
+                .depth
+                .expect("Cant traverse dag without depth")
         });
         travese_order.reverse();
         println!("{:?}", &travese_order);
 
+        let mut num = 0;
+
+        let path = std::path::Path::new("out").join(format!("{}.dot", num));
+        fs::File::create(path)
+            .unwrap()
+            .write_all(self.dot().as_bytes())
+            .unwrap();
+        num += 1;
+
         while !self.is_finished() {
-
             for node_index in travese_order.iter() {
-
-                let parents: Vec<(EdgeIndex, NodeIndex)> = self.dag
-                    .parents(*node_index)
-                    .iter(&self.dag)
-                    .collect();
+                let parents: Vec<(EdgeIndex, NodeIndex)> =
+                    self.dag.parents(*node_index).iter(&self.dag).collect();
 
                 for (edge_index, parent_index) in &parents {
-
                     let add_parent_needed = Self::calc_add_parent_needed(
                         self.dag.edge_weight(*edge_index).unwrap(),
-                        self.dag.node_weight(*node_index).unwrap().needed
+                        self.dag.node_weight(*node_index).unwrap().needed,
                     );
 
                     self.dag.node_weight_mut(*parent_index).unwrap().needed += add_parent_needed;
@@ -292,6 +301,12 @@ impl Factory {
                     self.dag.node_weight_mut(*node_index).unwrap().needed = 0;
                 }
             }
+            let path = std::path::Path::new("out").join(format!("{}.dot", num));
+            fs::File::create(path)
+                .unwrap()
+                .write_all(self.dot().as_bytes())
+                .unwrap();
+            num += 1;
         }
         self.print_dot();
         self.ore_needed()
@@ -306,7 +321,7 @@ impl Factory {
 }
 
 fn main() -> AnyResult<()> {
-    let file = fs::read_to_string("input/14-exmaple-6")?;
+    let file = fs::read_to_string("input/14-example-2")?;
     let formulas = Formulas::try_from(file.as_str())?;
     println!("{:#?}", &formulas);
     let mut factory = Factory::from_formulas(&formulas)?;

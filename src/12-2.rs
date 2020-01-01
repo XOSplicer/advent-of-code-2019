@@ -3,7 +3,6 @@ use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
-use std::ops::{Add, Neg};
 
 #[derive(Debug, Clone)]
 struct Vec3D {
@@ -144,7 +143,7 @@ fn lcm(a: usize, b: usize) -> usize {
 }
 
 fn main() -> AnyResult<()> {
-    let mut moons = fs::read_to_string("input/12")?
+    let moons = fs::read_to_string("input/12")?
         .lines()
         .map(Vec3D::from)
         .enumerate()
