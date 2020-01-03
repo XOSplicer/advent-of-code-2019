@@ -119,11 +119,4 @@ mod test {
         assert_eq!(super::to_last_digit(38), 8);
         assert_eq!(super::to_last_digit(-17), 7);
     }
-    #[test]
-    fn pattern() {
-        assert_eq!(
-            super::pattern(0).take(8).collect::<Vec<_>>(),
-            &[1, 0, -1, 0, 1, 0, -1, 0]
-        );
-    }
 }
