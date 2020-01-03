@@ -2,17 +2,6 @@ use rayon::prelude::*;
 use std::fs;
 use std::iter;
 
-fn pattern(element_index: usize) -> impl Iterator<Item = i32> {
-    let n = element_index + 1;
-    iter::empty()
-        .chain(iter::repeat(0).take(n))
-        .chain(iter::repeat(1).take(n))
-        .chain(iter::repeat(0).take(n))
-        .chain(iter::repeat(-1).take(n))
-        .cycle()
-        .skip(1)
-}
-
 fn to_last_digit(n: i32) -> u32 {
     format!("{}", n)
         .chars()
@@ -52,10 +41,31 @@ fn main() {
         .unwrap();
     println!("Message Offset {}", &message_offset);
     let message_len = 8;
-    // let truncate_to = message_offset + message_len + 2;
-    // TODO: the input can likeley be truncated, as the pattern has lots of leading zeros at some point, so that later digits are only influenced by the digits behind a certain point relative to themself
-    // this is actually not correct, they are not influenced by the digits leading up to them, not including themself
-    // futhermore the input and the pattern are cyclic with period 10_000 and 4n (offset -1), which might be useful
+
+    // NOTE: the input can likeley be truncated, as the pattern has
+    // lots of leading zeros at some point, so that later digits are
+    // only influenced by the digits behind a certain point relative to themself
+    //
+    // this is actually not correct,
+    // they are not influenced by the digits leading up to them, not including themself
+    // they are only influenced by themselfs and the trailing digits,
+    // because all leading coefficients are `0`
+    //
+    // even more interesting: if the message is past the half of the list,
+    // for each relevant element, all coefficients following the element are `1`
+    // This simplifies the calculation alot.
+    // measurements (perf + flamegraph) have shown, that generating the coefficents takes about
+    // 1/3 of the CPU cycles
+    //
+    // futhermore the input and the pattern are cyclic with period 10_000
+    // and 4n (offset -1), which might be useful
+
+    if message_offset > input.len() / 2 {
+        println!("Message in second half of input, optimization allowed");
+    } else {
+        panic!("Message not in second half of input, optimization disallowed")
+    }
+
     let pretruncate = message_offset;
     input.drain(0..pretruncate);
     println!("Truncated Input");
@@ -71,17 +81,13 @@ fn main() {
             .map(|(element_index, _element)| element_index)
             .map(|element_index| {
                 // println!("Phase {} Index {}", &phase, element_index);
-                let summed = list
-                    .iter()
-                    .zip(pattern(element_index).skip(pretruncate))
-                    .map(|(element, coefficient)| *element as i32 * coefficient)
-                    .sum();
-                to_last_digit(summed)
+                let summed: u32 = list.iter().skip(element_index).sum();
+                to_last_digit(summed as i32)
             })
             .collect();
         new_list
     });
-    println!("Input (truncated)");
+    println!("Final list (truncated)");
     print_8(&final_list);
     let message: usize = final_list
         .iter()
