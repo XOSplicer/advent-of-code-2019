@@ -1,4 +1,5 @@
 use anyhow::Result as AnyResult;
+use std::cmp::Ordering;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::fmt;
@@ -110,17 +111,14 @@ struct MoonComponent {
 impl MoonComponent {
     // only applies gravity to this moon, not the other
     fn apply_gravity(&mut self, other: &MoonComponent) {
-        self.velocity = self.velocity
-            + if self.position < other.position {
-                1
-            } else if self.position > other.position {
-                -1
-            } else {
-                0
-            };
+        self.velocity += match self.position.cmp(&other.position) {
+            Ordering::Greater => -1,
+            Ordering::Less => 1,
+            Ordering::Equal => 0,
+        }
     }
     fn apply_velocity(&mut self) {
-        self.position = self.position + self.velocity;
+        self.position += self.velocity;
     }
 }
 

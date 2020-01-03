@@ -53,7 +53,7 @@ fn print_8(list: &[u32]) {
     for i in list.iter().take(8) {
         print!("{}", i);
     }
-    println!("");
+    println!();
 }
 
 #[cfg(test)]

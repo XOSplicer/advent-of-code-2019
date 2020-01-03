@@ -1,4 +1,5 @@
 use anyhow::Result as AnyResult;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
@@ -146,28 +147,22 @@ impl Moon {
     // only applies gravity to this moon, not the other
     fn apply_gravity(&mut self, other: &Moon) {
         self.velocity = &self.velocity
-            + if self.position.x < other.position.x {
-                Vec3D::unit_x()
-            } else if self.position.x > other.position.x {
-                -Vec3D::unit_x()
-            } else {
-                Vec3D::default()
+            + match self.position.x.cmp(&other.position.x) {
+                Ordering::Greater => -Vec3D::unit_x(),
+                Ordering::Less => Vec3D::unit_x(),
+                Ordering::Equal => Vec3D::default(),
             };
         self.velocity = &self.velocity
-            + if self.position.y < other.position.y {
-                Vec3D::unit_y()
-            } else if self.position.y > other.position.y {
-                -Vec3D::unit_y()
-            } else {
-                Vec3D::default()
+            + match self.position.y.cmp(&other.position.y) {
+                Ordering::Greater => -Vec3D::unit_y(),
+                Ordering::Less => Vec3D::unit_y(),
+                Ordering::Equal => Vec3D::default(),
             };
         self.velocity = &self.velocity
-            + if self.position.z < other.position.z {
-                Vec3D::unit_z()
-            } else if self.position.z > other.position.z {
-                -Vec3D::unit_z()
-            } else {
-                Vec3D::default()
+            + match self.position.z.cmp(&other.position.z) {
+                Ordering::Greater => -Vec3D::unit_z(),
+                Ordering::Less => Vec3D::unit_z(),
+                Ordering::Equal => Vec3D::default(),
             };
     }
     fn apply_velocity(&mut self) {
